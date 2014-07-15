@@ -1,0 +1,517 @@
+//--indexing data
+
+//1. Creating indices
+curl -XPUT http://localhost:9200/blog/article/1 -d '{"title": "New version of Elasticsearch released!", "content": "...", "tags":["announce", "elasticsearch", "release"] }'
+
+//get
+curl -XGET 'localhost:9200/blog/article/1?pretty'
+
+//delete
+curl -XDELETE 'http://localhost:9200/blog/'
+
+
+//2.Settings for a newly created index
+curl -XPUT http://localhost:9200/blog/article/1 -d '{"settings" : {"number_of_shards" : 1,"number_of_replicas" : 2},"title": "New version of Elasticsearch released!", "content": "...", "tags":["announce", "elasticsearch", "release"]}'
+
+//delete
+curl -XDELETE 'http://localhost:9200/blog/'
+
+
+//3.Index structure mapping
+curl -XPOST 'http://localhost:9200/posts' -d @posts.json
+
+//get
+curl -XGET 'localhost:9200/posts/post/1?pretty'
+
+//delete
+curl -XDELETE 'http://localhost:9200/posts/'
+
+
+//4. Routing
+//define index structure
+curl -XPUT 'http://localhost:9200/posts' -d @route-posts.json
+
+//create index (post) 
+curl -XPOST 'localhost:9200/posts/post/1' -d '{"id":1,"name":"New post","contents": "New test post","userId":1234567}'
+
+//routing get (userId must be provided)
+curl -XGET 'http://localhost:9200/posts/_search?q=userId:1234567'
+
+
+ "properties" : {
+      "author" : {
+        "type" : "string"
+      },
+      "characters" : {
+        "type" : "string"
+      },
+      "copies" : {
+        "type" : "long",
+        "ignore_malformed" : false
+      },
+      "otitle" : {
+        "type" : "string"
+      },
+      "tags" : {
+        "type" : "string"
+      },
+      "title" : {
+        "type" : "string"
+      },
+      "year" : {
+        "type" : "long",
+        "ignore_malformed" : false,
+        "index" : "analyzed"
+      },
+      "available" : {
+        "type" : "boolean"
+      }
+
+
+//search (/home/david/study/elasticsearch/test/Chapter 3 - code)
+//create index
+//1) initial index
+curl -XPOST 'localhost:9200/library'
+
+//2) structure index
+curl -XPUT 'localhost:9200/library/book/_mapping' -d @mapping.json
+
+//3) populate index with document (batch process, docid:1,2,3,4, all types are 'book')
+curl -s -XPOST 'localhost:9200/_bulk' --data-binary @documents.json
+
+//4) just get document 1 for testing
+curl -XGET 'localhost:9200/library/book/1?pretty'
+
+//general search
+//1. simple search
+curl -XGET 'localhost:9200/library/book/_search?q=title:crime&pretty=true'
+
+//2. query dsl search
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{"query" : {"query_string" : { "query" : "title:crime" }}}'
+
+//3.Paging and result size
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{"from" : 0,"size" : 20,"query" : {"query_string" : { "query" : "title:crime" }}}'
+
+//4. Returning the version value
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{"version" : true,"query" : {"query_string" : { "query" : "title:crime" }}}'
+
+//5. Limiting the score (note: our document max_score is  0.15342641 which is lower than 0.75)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{"min_score" : 0.75,"query" : {"query_string" : { "query" : "title:crime" }}}'
+
+
+//6. Choosing the fields that we want to return
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{"fields" : [ "title", "year" ],"query" : {"query_string" : { "query" : "title:crime" }}}'
+
+//7. Using the script fields
+curl -XGET 'localhost:9200/library/book/_search?pretty=true'-d '{"script_fields" : {"correctYear" : {"script" : "doc['year'].value - 1800"}},"query" : {"query_string" : { "query" : "title:crime" }}}'
+
+curl -XGET 'localhost:9200/library/book/_search?pretty=true'-d '
+{
+"script_fields" : {
+"correctYear" : {
+"script" : "_source.year - 1800"
+}
+},
+"query" : {
+"query_string" : { "query" : "title:crime" }
+}
+}'
+
+
+//Search types
+curl -XGET 'localhost:9200/library/book/_search?pretty=true&search_
+type=query_and_fetch' -d '{
+"query" : {
+"term" : { "title" : "crime" }
+}
+}'
+
+//Search execution preferences
+
+//Basic queries
+//1.The term query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{
+"query" : {
+"term" : {
+"title" : "crime"
+}
+}
+}'
+
+//2. The terms query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{
+"query" : {
+"terms" : {
+"tags" : [ "novel", "book" ],
+"minimum_match" : 1
+}
+}
+}'
+
+//3.The match_all query
+//1) get all documents
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{
+"query" : {
+"match_all" : {}
+}
+}'
+
+//2) get all documents with boost =2.0
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{
+"query" : {
+"match_all" : {
+"boost" : 2.0
+}
+}
+}'
+
+//4.The common terms query
+
+
+//5.The match query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"match" : {
+"title" : "crime and punishment"
+}
+}
+}'
+
+
+//6. The multi_match query (it can be run against multiple fields with the use of the fields parameter.)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"multi_match" : {
+"query" : "crime punishment",
+"fields" : [ "title", "otitle" ]
+}
+}
+}'
+
+
+//7. The query_string query (the query_string query supports the full Apache Lucene query syntax)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{
+"query" : {
+"query_string" : {
+"query" : "title:crime^10 +title:punishment -otitle:cat +author:(+Fyodor +dostoevsky)",
+"default_field" : "title"
+}
+}
+}'
+
+//8. The identifiers query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"ids" : {
+"values" : [ "1", "2", "3" ]
+}
+}
+}'
+
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"ids" : {
+"type" : "book",
+"values" : [ "1", "2" ]
+}
+}
+}'
+
+//9. The prefix query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"prefix" : {
+"title" : "cri"
+}
+}
+}'
+
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"prefix" : {
+"title" : {
+"value" : "cri",
+"boost" : 3.0
+}
+}
+}
+}'
+
+
+//10.The fuzzy_like_this query (support multiple fields)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"fuzzy_like_this" : {
+"fields" : ["title", "otitle"],
+"like_text" : "crime punishment"
+}
+}
+}'
+
+//11.The fuzzy_like_this_field query (for single field)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"fuzzy_like_this_field" : {
+"title" : {
+"like_text" : "crime and punishment"
+}
+}
+}
+}'
+
+//12. The fuzzy query (This query can be expensive when it comes to CPU resources, but it can help us when we need
+//fuzzy matching, for example, when users make spelling mistakes. In our example,
+//let's assume that instead of crime)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"fuzzy" : {
+"title" : "crme"
+}
+}
+}'
+
+//13.The more_like_this query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"more_like_this" : {
+"fields" : [ "title", "otitle" ],
+"like_text" : "crime and punishment",
+"min_term_freq" : 1,
+"min_doc_freq" : 1
+}
+}
+}'
+
+//14. The more_like_this_field query (only support single field)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"more_like_this_field" : {
+"title" : {
+"like_text" : "crime and punishment",
+"min_term_freq" : 1,
+"min_doc_freq" : 1
+}
+}
+}
+}'
+
+//15.The wildcard query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"wildcard" : {
+"title" : "cr?me"
+}
+}
+}'
+
+//16. The range query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"range" : {
+"year" : {
+"gte" : 1700,
+"lte" : 1900
+}
+}
+}
+}'
+
+//17.The dismax query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '{"query" : {"dismax" : {"tie_breaker" : 0.99,"boost" : 10.0,"queries" : [{"match" : {"title" : "crime"}},{"match" : {"author" : "fyodor"}}]}}}'
+
+//18.The regular expression query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"regexp" : {
+"title" : {
+"value" : "cr.m[ae]",
+"boost" : 10.0
+}
+}
+}
+}'
+
+//Compound queries
+//1. The bool query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"bool" : {
+"must" : {
+"term" : {
+"title" : "crime"
+}
+},
+"should" : {
+"range" : {
+"year" : {
+"from" : 1900,
+"to" : 2000
+}
+}
+},
+"must_not" : {
+"term" : {
+"otitle" : "nothing"
+}
+}
+}
+}
+
+
+//2.The boosting query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"boosting" : {
+"positive" : {
+"term" : {
+"title" : "crime"
+}
+},
+"negative" : {
+"range" : {
+"year" : {
+"from" : 1800,
+"to" : 1900
+}
+}
+},
+"negative_boost" : 0.5
+}
+}
+}'
+
+//3.The constant_score query
+
+//4.The indices query
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"indices" : {
+"indices" : [ "library" ],
+"query" : {
+"term" : {
+"title" : "crime"
+}
+},
+"no_match_query" : {
+"term" : {
+"user" : "crime"
+}
+}
+}
+}
+}'
+
+
+//Filtering your results
+//1. general filter
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query" : {
+"match" : { "title" : "Catch-22" }
+},
+"post_filter" : {
+"term" : { "year" : 1961 }
+}
+}'
+
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"query": {
+"filtered" : {
+"query" : {
+"match" : { "title" : "Catch-22" }
+},
+"filter" : {
+"term" : { "year" : 1961 }
+}
+}
+}
+}'
+
+//2.The range filter 
+//(gt : This means greater than, lt : This means lower than, gte : This means greater or equals to, lte : This means lower or equals to)
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"post_filter" : {
+"range" : {
+"year" : {
+"gte": 1930,
+"lte": 1990
+}
+}
+}
+}'
+
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"post_filter" : {
+"range" : {
+"year" : {
+"gte": 1930,
+"lt": 1990
+}
+}
+}
+}'
+
+
+//3.The exists filter
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"post_filter" : {
+"exists" : { "field": "year" }
+}
+}'
+
+//4.The missing filter
+curl -XGET 'localhost:9200/library/book/_search?pretty=true' -d '
+{
+"post_filter" : {
+"missing" : {
+"field": "year",
+"null_value": 0,
+"existence": true
+}
+}
+}'
+
+
+//finally remove index
+curl -XDELETE 'http://localhost:9200/library/'
+
+
+
+//test
+curl -XPUT 'localhost:9200/blog/article/1' -d '{"user":"kimchy","postDate":"2014-07-14T01:33:28.599Z","message":"trying out Elasticsearch"}'
+curl -XGET 'localhost:9200/blog/article/_search?pretty=true' -d '{"query" : {"query_string" : { "query" : "user:kimchy" }}}'
+curl -XDELETE 'http://localhost:9200/blog/'
+
+
+
+
+
+
+
+
+
+
+
+
+
