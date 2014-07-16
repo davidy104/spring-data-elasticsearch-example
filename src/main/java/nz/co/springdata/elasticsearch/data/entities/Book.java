@@ -5,6 +5,7 @@ import static org.springframework.data.elasticsearch.annotations.FieldIndex.not_
 import static org.springframework.data.elasticsearch.annotations.FieldType.String;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
@@ -38,7 +39,7 @@ public class Book {
 			@NestedField(dotSuffix = "sort", type = String, store = true, indexAnalyzer = "keyword") })
 	private List<String> characters = new ArrayList<String>();
 
-	@Field
+	@Field(type = String, store = true)
 	private List<String> tags = new ArrayList<String>();
 
 	@Field(type = FieldType.Long)
@@ -49,6 +50,16 @@ public class Book {
 
 	@Field(type = FieldType.Long, index = analyzed)
 	private long year;
+
+	public Book addCharacters(String... character) {
+		characters = Arrays.asList(character);
+		return this;
+	}
+
+	public Book addTags(String... tag) {
+		tags = Arrays.asList(tag);
+		return this;
+	}
 
 	public String getId() {
 		return id;
